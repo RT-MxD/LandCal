@@ -1,0 +1,15 @@
+# Core LangGraph Workflow Engine
+langgraph>=0.2.0
+
+# Interactive Web Application
+streamlit>=1.30.0
+
+# Type hints and annotations
+typing-extensions>=4.8.0
+
+# Automated Testing
+pytest>=8.0.0
+
+# Database & Environment
+psycopg2-binary>=2.9.9
+python-dotenv>=1.0.0
