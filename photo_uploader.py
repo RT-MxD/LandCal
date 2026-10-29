@@ -160,3 +160,4 @@ else:
                         delete_survey_photo(photo["file_path"], survey_no=survey_no)
                         st.rerun()
                 st.markdown('</div>', unsafe_allow_html=True)
+
