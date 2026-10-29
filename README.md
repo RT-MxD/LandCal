@@ -18,13 +18,13 @@ The workflow follows a structured 6-row arrangement:
    - `New Survey No`
    - `Area` (Base input)
    - `Bigha` (Formula: `area / 16`)
-   - `Sq.mt` (Formula: `area / 1618.70`)
-   - `Sq.yd` (Formula: `area / 1930`)
+   - `Sq.mt` (Formula: `area / 1618.74`)
+   - `Sq.yd` (Formula: `area / 1936`)
    - *Auto-calculates dynamically while allowing manual user overrides.*
 
-3. **Row 3 (Rates)**:
-   - `Rupees per Bigha`
-   - `Rupees per Sq.yd`
+3. **Row 3 (Rate & Valuations)**:
+   - `Valuation per Bigha` (Manually entered by user)
+   - `Valuation per Sq.yd` (Manually entered by user)
 
 4. **Row 4 (Parties Involved)**:
    - `Buyer Name`
@@ -80,10 +80,38 @@ pip install -r requirements.txt
 Launch the interactive web UI matching the 6-row layout:
 
 ```bash
-streamlit run app.py
+streamlit run landcal_application.py
 ```
 
-### 2. Command Line Interface (CLI)
+### 2. FastAPI REST API Server
+Launch the FastAPI REST API with automatic docs and live reloading:
+
+```bash
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
+```
+
+- **Interactive Swagger UI**: [http://localhost:8000/docs](http://localhost:8000/docs)
+- **ReDoc Documentation**: [http://localhost:8000/redoc](http://localhost:8000/redoc)
+
+#### Key REST Endpoints:
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/` | API status, version, and documentation links |
+| `GET` | `/api/health` | PostgreSQL database connectivity and health check |
+| `POST` | `/api/convert-metrics` | Quick area metrics conversion (`Bigha`, `Sq.mt`, `Sq.yd`) |
+| `POST` | `/api/calculate` | Execute full LangGraph calculation & deal report generation |
+| `GET` | `/api/reports` | List saved reports (filter by `new_survey_no`, `limit`) |
+| `GET` | `/api/reports/{id}` | Retrieve full report by record ID |
+| `PUT` | `/api/reports/{id}` | Update existing report with new values/payments |
+| `DELETE` | `/api/reports/{id}` | Delete report from PostgreSQL |
+| `GET` | `/api/reports/{id}/markdown` | Download deal Markdown summary report |
+| `GET` | `/api/reports/export/csv` | Download CSV backup spreadsheet of all saved reports |
+| `POST` | `/api/photos/upload` | Upload inspection photos locked to a Survey Number |
+| `GET` | `/api/photos` | List photos for a survey number (or old + new survey) |
+| `GET` | `/api/photos/file/{survey}/{file}` | Stream and view attached photo file directly |
+| `DELETE` | `/api/photos` | Delete an attached inspection photo |
+
+### 3. Command Line Interface (CLI)
 Run a calculation directly from terminal:
 
 ```bash
@@ -96,7 +124,7 @@ Or pass custom parameters:
 python cli.py --district "Vadodara" --taluka "Padra" --village "Samiyala" --area 1600 --rate-bigha 1000000 --total-payment 100000000
 ```
 
-### 3. Programmatic Usage in Python
+### 4. Programmatic Usage in Python
 You can import the compiled LangGraph workflow anywhere in your code:
 
 ```python
@@ -136,5 +164,5 @@ print(result["summary_report"])
 Run the full test suite with:
 
 ```bash
-pytest test_land_graph.py test_db.py -v
+pytest tests/ -v
 ```
