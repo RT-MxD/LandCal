@@ -13,3 +13,9 @@ pytest>=8.0.0
 # Database & Environment
 psycopg2-binary>=2.9.9
 python-dotenv>=1.0.0
+
+# FastAPI REST API Backend
+fastapi>=0.110.0
+uvicorn>=0.28.0
+pydantic>=2.0.0
+python-multipart>=0.0.9
