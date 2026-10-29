@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional
 
 DEFAULT_PHOTO_DIR = Path(__file__).resolve().parent / "uploads" / "land_photos"
+DEFAULT_PHOTO_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def sanitize_survey_no(survey_no: Optional[str]) -> str:
@@ -115,3 +116,54 @@ def delete_survey_photo(photo_path: str, survey_no: Optional[str] = None) -> boo
         return True
     except OSError:
         return False
+
+
+def photo_already_saved(
+    survey_no: str,
+    original_filename: str,
+    file_size: int,
+    base_dir: Optional[Path] = None
+) -> bool:
+    """
+    Checks if a photo with the same original basename and size already exists in the survey folder.
+    Prevents duplicate auto-saving when Streamlit reruns.
+    """
+    clean_no = sanitize_survey_no(survey_no)
+    root = Path(base_dir) if base_dir else DEFAULT_PHOTO_DIR
+    survey_dir = root / f"survey_{clean_no}"
+    if not survey_dir.exists() or not survey_dir.is_dir():
+        return False
+
+    safe_base = re.sub(r'[^a-zA-Z0-9_\-]', '_', Path(original_filename).stem)
+    ext = Path(original_filename).suffix.lower()
+    for f in survey_dir.iterdir():
+        if f.is_file() and f.stat().st_size == file_size:
+            if safe_base in f.name and f.suffix.lower() == ext:
+                return True
+    return False
+
+
+def get_all_survey_photos(
+    new_survey_no: Optional[str] = None,
+    old_survey_no: Optional[str] = None,
+    base_dir: Optional[Path] = None
+) -> List[Dict[str, Any]]:
+    """
+    Lists all photos across both new and old survey numbers without duplicates.
+    Guarantees photos are found whether searched by new or old survey number.
+    """
+    seen_paths = set()
+    combined = []
+    candidates = []
+    if new_survey_no and str(new_survey_no).strip():
+        candidates.append(str(new_survey_no).strip())
+    if old_survey_no and str(old_survey_no).strip():
+        candidates.append(str(old_survey_no).strip())
+
+    for s_no in candidates:
+        for p in list_survey_photos(s_no, base_dir=base_dir):
+            if p["file_path"] not in seen_paths:
+                seen_paths.add(p["file_path"])
+                combined.append(p)
+    return combined
+
