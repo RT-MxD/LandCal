@@ -40,8 +40,11 @@ from photo_manager import (
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application startup and shutdown lifecycle management."""
-    # Ensure storage directory exists
-    DEFAULT_PHOTO_DIR.mkdir(parents=True, exist_ok=True)
+    # Ensure storage directory exists (safe against read-only serverless filesystems)
+    try:
+        DEFAULT_PHOTO_DIR.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        pass
     # Attempt to initialize database tables if DATABASE_URL is configured
     try:
         init_db()
@@ -92,9 +95,9 @@ class AreaConversionRequest(BaseModel):
 
 class AreaConversionResponse(BaseModel):
     area: float
-    bigha: float = Field(..., description="Bigha = area / 16")
-    sq_mt: float = Field(..., description="Sq.mt = area / 1618.74")
-    sq_yd: float = Field(..., description="Sq.yd = area / 1936")
+    bigha: float = Field(..., description="Bigha = area / 1618.74")
+    sq_mt: float = Field(..., description="Sq.mt = area * 1618.74")
+    sq_yd: float = Field(..., description="Sq.yd = area * 1936")
 
 
 class LandCalculationRequest(BaseModel):
@@ -211,16 +214,16 @@ def health_check():
 def convert_metrics(req: AreaConversionRequest):
     """
     Utility endpoint for instant area conversions based on formulas:
-    - Bigha = area / 16
-    - Sq.mt = area / 1618.74
-    - Sq.yd = area / 1936
+    - Bigha = area / 1618.74
+    - Sq.mt = area * 1618.74
+    - Sq.yd = area * 1936
     """
     area = req.area
     return AreaConversionResponse(
         area=round(area, 4),
-        bigha=round(area / 16.0, 4) if area > 0 else 0.0,
-        sq_mt=round(area / 1618.74, 4) if area > 0 else 0.0,
-        sq_yd=round(area / 1936.0, 4) if area > 0 else 0.0,
+        bigha=round(area / 1618.74, 4) if area > 0 else 0.0,
+        sq_mt=round(area * 1618.74, 4) if area > 0 else 0.0,
+        sq_yd=round(area * 1936.0, 4) if area > 0 else 0.0,
     )
 
 
@@ -240,11 +243,20 @@ def calculate_land_deal(req: LandCalculationRequest):
     6. Generates full Markdown Deal Report.
     7. Persists or updates record in PostgreSQL (if DATABASE_URL is configured and save_to_db is True).
     """
+    # Auto-calculate total agreed payment: bigha * rate_bigha or sq.yd * rate_sqyd
+    calc_bigha = round(req.area / 1618.74, 4) if req.area > 0 else 0.0
+    calc_sqyd = round(req.area * 1936.0, 4) if req.area > 0 else 0.0
+    if req.rupees_per_bigha > 0:
+        tot_payment = round(calc_bigha * req.rupees_per_bigha, 2)
+    elif req.rupees_per_sq_yd > 0:
+        tot_payment = round(calc_sqyd * req.rupees_per_sq_yd, 2)
+    else:
+        tot_payment = float(req.total_payment or 0.0)
+
     # Consolidate payment amounts and history
     base_received = float(req.payment_received or 0.0)
     curr_new = float(req.new_payment_received or 0.0)
     total_received = round(base_received + curr_new, 2)
-    tot_payment = float(req.total_payment or 0.0)
     pay_remaining = round(tot_payment - total_received, 2)
 
     payment_date = req.last_payment_date or str(date.today())
