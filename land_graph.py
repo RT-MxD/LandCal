@@ -123,20 +123,20 @@ def validate_and_normalize_node(state: LandDealState) -> Dict[str, Any]:
 def calculate_area_metrics_node(state: LandDealState) -> Dict[str, Any]:
     """
     Automatically calculates area metrics based on user's exact formulas:
-    - Bigha = area / 16
-    - Sq.mt = area / 1618.74
-    - Sq.yd = area / 1936
+    - Bigha = area / 1618.74
+    - Sq.mt = area * 1618.74
+    - Sq.yd = area * 1936
     """
     log = list(state.get("calculation_log", []))
     area = state.get("area", 0.0)
 
     # Formulas automatically calculated from input area
-    calc_bigha = round(area / 16.0, 4) if area > 0 else 0.0
-    calc_sq_mt = round(area / 1618.74, 4) if area > 0 else 0.0
-    calc_sq_yd = round(area / 1936.0, 4) if area > 0 else 0.0
+    calc_bigha = round(area / 1618.74, 4) if area > 0 else 0.0
+    calc_sq_mt = round(area * 1618.74, 4) if area > 0 else 0.0
+    calc_sq_yd = round(area * 1936.0, 4) if area > 0 else 0.0
 
     log.append(f"Step 2: Area conversions automatically calculated (Area={area}): "
-               f"Bigha={calc_bigha} [area/16], Sq.mt={calc_sq_mt} [area/1618.74], Sq.yd={calc_sq_yd} [area/1936].")
+               f"Bigha={calc_bigha} [area/1618.74], Sq.mt={calc_sq_mt} [area*1618.74], Sq.yd={calc_sq_yd} [area*1936].")
 
     return {
         "bigha": calc_bigha,
@@ -147,7 +147,10 @@ def calculate_area_metrics_node(state: LandDealState) -> Dict[str, Any]:
 
 
 def calculate_valuations_node(state: LandDealState) -> Dict[str, Any]:
-    """Records land valuation per bigha and per sq.yd manually entered by the user."""
+    """
+    Calculates land valuation per bigha and per sq.yd.
+    Automatically calculates Total Agreed Payment = (Bigha * Valuation per Bigha) or (Sq.yd * Valuation per Sq.yd).
+    """
     log = list(state.get("calculation_log", []))
     bigha = state.get("bigha", 0.0)
     sq_yd = state.get("sq_yd", 0.0)
@@ -157,11 +160,25 @@ def calculate_valuations_node(state: LandDealState) -> Dict[str, Any]:
     val_bigha = round(bigha * rupees_per_bigha, 2)
     val_sqyd = round(sq_yd * rupees_per_sq_yd, 2)
 
-    log.append(f"Step 3: Valuations recorded: Valuation per Bigha = ₹{rupees_per_bigha:,.2f}, Valuation per Sq.yd = ₹{rupees_per_sq_yd:,.2f}.")
+    # Formula for Total Agreed Payment: bigha * valuation per bigha or sq.yd * valuation per sq.yd
+    if rupees_per_bigha > 0:
+        total_payment = val_bigha
+        log.append(f"Step 3: Total Agreed Payment automatically calculated from Bigha: {bigha} × ₹{rupees_per_bigha:,.2f} = ₹{total_payment:,.2f}.")
+    elif rupees_per_sq_yd > 0:
+        total_payment = val_sqyd
+        log.append(f"Step 3: Total Agreed Payment automatically calculated from Sq.yd: {sq_yd} × ₹{rupees_per_sq_yd:,.2f} = ₹{total_payment:,.2f}.")
+    else:
+        total_payment = float(state.get("total_payment", 0.0) or 0.0)
+        log.append(f"Step 3: Valuations recorded: Valuation per Bigha = ₹{rupees_per_bigha:,.2f}, Valuation per Sq.yd = ₹{rupees_per_sq_yd:,.2f}. Total Agreed Payment = ₹{total_payment:,.2f}.")
+
+    payment_received = float(state.get("payment_received", 0.0) or 0.0)
+    payment_remaining = round(total_payment - payment_received, 2)
 
     return {
         "valuation_by_bigha": val_bigha,
         "valuation_by_sqyd": val_sqyd,
+        "total_payment": total_payment,
+        "payment_remaining": payment_remaining,
         "calculation_log": log,
     }
 
@@ -276,9 +293,9 @@ def generate_deal_report_node(state: LandDealState) -> Dict[str, Any]:
 - **Old Survey No:** {old_survey}
 - **New Survey No:** {new_survey}
 - **Area (Input):** {area:,.4f}
-- **Bigha [Formula: area / 16]:** {bigha:,.4f}
-- **Sq.mt [Formula: area / 1618.74]:** {sq_mt:,.4f}
-- **Sq.yd [Formula: area / 1936]:** {sq_yd:,.4f}
+- **Bigha [Formula: area / 1618.74]:** {bigha:,.4f}
+- **Sq.mt [Formula: area * 1618.74]:** {sq_mt:,.4f}
+- **Sq.yd [Formula: area * 1936]:** {sq_yd:,.4f}
 
 ## 3. Rate & Valuations
 - **Valuation per Bigha:** ₹{rate_bigha:,.2f}
@@ -290,7 +307,7 @@ def generate_deal_report_node(state: LandDealState) -> Dict[str, Any]:
 - **Broker:** {broker}
 
 ## 5. Transaction & Payment Schedule
-- **Agreed Total Payment:** ₹{total_pay:,.2f}
+- **Agreed Total Payment [Formula: bigha * rate/bigha or sq.yd * rate/sq.yd]:** ₹{total_pay:,.2f}
 - **Total Payment Received (Done by Buyer):** ₹{pay_received:,.2f}
 - **Payment Remaining:** ₹{pay_remaining:,.2f}
 - **Last Payment Date:** {last_payment_date}
