@@ -26,20 +26,17 @@ from psycopg2.extras import RealDictCursor
 
 
 def get_database_url() -> Optional[str]:
-    """Retrieves and normalizes the DATABASE_URL environment variable."""
-    # Re-check .env in case it was edited recently
-    env_file = Path(__file__).resolve().parent / ".env"
-    if env_file.exists():
-        try:
-            with open(env_file, "r", encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    if line.startswith("DATABASE_URL=") and not line.startswith("#"):
-                        val = line.split("DATABASE_URL=", 1)[1].strip().strip('"').strip("'")
-                        if val:
-                            return val
-        except Exception:
-            pass
+    # 1. Check Streamlit Cloud Secrets first if running inside Streamlit
+    try:
+        import streamlit as st
+        if "DATABASE_URL" in st.secrets:
+            val = str(st.secrets["DATABASE_URL"]).strip()
+            if val:
+                return val
+    except Exception:
+        pass
+
+    # 2. Check OS environment variable (loaded from .env or Vercel Environment Variables)
     url = os.getenv("DATABASE_URL", "").strip()
     return url if url else None
 
@@ -64,6 +61,10 @@ def get_connection():
     db_url = get_database_url()
     if not db_url:
         raise ValueError("DATABASE_URL is not set in .env")
+    # Ensure SSL for Supabase / cloud database connections
+    if ("supabase.co" in db_url or "pooler.supabase.com" in db_url) and "sslmode" not in db_url:
+        sep = "&" if "?" in db_url else "?"
+        db_url = f"{db_url}{sep}sslmode=require"
     return psycopg2.connect(db_url)
 
 
